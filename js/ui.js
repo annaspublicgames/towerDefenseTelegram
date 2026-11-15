@@ -132,11 +132,11 @@ function uiSetWaveState(state, waveNum) {
     btnWave.textContent = waveNum < TOTAL_WAVES
       ? '▶ Welle ' + (waveNum+1) + ' starten'
       : '▶ Letzte Welle!';
-    waveInfoEl.textContent = 'Platziere Türme, dann starte!';
+    waveInfoEl.textContent = '';
   } else if (state === 'running') {
     btnWave.disabled = true;
     btnWave.textContent = '⌛ Welle läuft...';
-    waveInfoEl.textContent = 'Gegner abwehren!';
+    waveInfoEl.textContent = '';
   } else {
     btnWave.disabled = true;
     btnWave.textContent = '—';

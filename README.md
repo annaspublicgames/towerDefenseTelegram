@@ -20,6 +20,12 @@ Online (GitHub Pages): siehe die Pages-URL dieses Repos.
   lokal gespeichert (localStorage).
 - **Geschwindigkeit:** Button zum Umschalten zwischen 1×, 2× und 3× — die
   Simulation läuft entsprechend schneller (die Darstellung bleibt flüssig).
+- **Endlos-Modus:** Eigene Karte unter den Leveln (immer freigeschaltet).
+  Prozedural immer stärker werdende Wellen ohne Siegbedingung; gespielt wird,
+  bis alle Leben weg sind. Start mit 600 Gold, 20 Leben, Turm-Upgrades und
+  Shop-Varianten aktiv. Der Highscore wird nach erreichter Welle (primär) und
+  getöteten Gegnern (sekundär) gewertet und lokal gespeichert (localStorage).
+  Im Endlos-Modus gibt es keine Taler.
 - **Shop & Taler (Meta-Fortschritt):** Für jeden Levelsieg gibt es „Taler" —
   mehr bei höherem Level und mehr übrigen Leben; ein bereits geschafftes Level
   erneut zu spielen gibt reduzierte Taler (25 %). Im Shop (Button auf der

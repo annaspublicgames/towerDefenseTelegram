@@ -40,6 +40,7 @@ function uiInit(onTowerSelect, onStartWave, onRestart) {
     startLevel(currentLevelIndex + 1);
   });
   document.getElementById('levels-btn').addEventListener('click', function () {
+    endlessMode = false;   // zurück im Menü: Endlos-Modus verlassen
     uiHideOverlay();
     showLevelSelect();
   });
@@ -156,7 +157,9 @@ function uiUpdateBtnStyles() {
 function uiUpdate(lives, gold, waveNum) {
   hudLives.textContent = lives;
   hudGold.textContent  = gold;
-  hudWave.textContent  = waveNum + ' / ' + TOTAL_WAVES;
+  // Endlos: keine Gesamtzahl, nur die laufende/erreichte Welle.
+  var endless = (typeof endlessMode !== 'undefined' && endlessMode);
+  hudWave.textContent  = endless ? ('' + waveNum) : (waveNum + ' / ' + TOTAL_WAVES);
 
   ['normal','splash','slow'].forEach(function (slot) {
     var type = (typeof activeTypeForSlot === 'function') ? activeTypeForSlot(slot) : slot;
@@ -167,11 +170,16 @@ function uiUpdate(lives, gold, waveNum) {
 }
 
 function uiSetWaveState(state, waveNum) {
+  var endless = (typeof endlessMode !== 'undefined' && endlessMode);
   if (state === 'ready') {
     btnWave.disabled = false;
-    btnWave.textContent = waveNum < TOTAL_WAVES
-      ? '▶ Welle ' + (waveNum+1) + ' starten'
-      : '▶ Letzte Welle!';
+    if (endless) {
+      btnWave.textContent = '▶ Welle ' + (waveNum+1) + ' starten';
+    } else {
+      btnWave.textContent = waveNum < TOTAL_WAVES
+        ? '▶ Welle ' + (waveNum+1) + ' starten'
+        : '▶ Letzte Welle!';
+    }
     waveInfoEl.textContent = '';
   } else if (state === 'running') {
     btnWave.disabled = true;
@@ -206,6 +214,21 @@ function uiShowOverlay(type, gold) {
       msg.textContent = 'Alle Level gemeistert! Gold übrig: ' + gold + talerLine;
       nextBtn.style.display = 'none';
     }
+    restartBtn.textContent = 'Nochmal';
+  } else if (typeof endlessMode !== 'undefined' && endlessMode) {
+    // ─── Endlos-Game-Over: Score + Highscore statt Taler ───
+    title.className = 'lose';
+    var isRecord = (typeof lastEndlessRecord !== 'undefined') && lastEndlessRecord;
+    title.textContent = isRecord ? '🏆 Neuer Rekord!' : '💀 Game Over';
+    if (isRecord) title.className = 'win';
+
+    var w = (typeof lastEndlessWave  === 'number') ? lastEndlessWave  : 0;
+    var k = (typeof lastEndlessKills === 'number') ? lastEndlessKills : 0;
+    var high = (typeof getEndlessHigh === 'function') ? getEndlessHigh() : null;
+    var recordLine = high ? ' · Bestmarke: Welle ' + high.wave + ' (' + high.kills + ' Kills)' : '';
+    msg.textContent = 'Welle ' + w + ' erreicht · ' + k + ' Gegner besiegt' + recordLine;
+
+    nextBtn.style.display = 'none';
     restartBtn.textContent = 'Nochmal';
   } else {
     title.className = 'lose';

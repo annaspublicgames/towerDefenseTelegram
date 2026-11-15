@@ -6,6 +6,8 @@ var canvas, ctx;
 var towers, enemies, projectiles, waveManager;
 var gold, lives, gameState, hoveredCell;
 var towerUpgradeLevel = 0; // globale Turm-Upgrade-Stufe (gilt für alle Türme)
+var endlessMode = false;   // true = Endlos-Modus (prozedurale Wellen, Highscore)
+var enemiesKilled = 0;     // getötete Gegner (für den Endlos-Highscore)
 
 function init() {
   canvas = document.getElementById('gameCanvas');
@@ -19,22 +21,29 @@ function init() {
   towers       = [];
   enemies      = [];
   projectiles  = [];
+  _chainBolts  = [];         // alte Blitz-Linien aus vorherigem Spiel verwerfen
+  clearParticles();          // alte Partikel verwerfen
   waveManager  = new WaveManager();
-  gold         = levelDef.startGold;
-  lives        = levelDef.startLives;
+  // Im Endlos-Modus feste Startwerte, sonst aus der Level-Definition.
+  gold         = endlessMode ? ENDLESS_START_GOLD  : levelDef.startGold;
+  lives        = endlessMode ? ENDLESS_START_LIVES : levelDef.startLives;
   gameState    = 'playing';
   hoveredCell  = null;
   selectedTowerType = null;
   towerUpgradeLevel = 0;
+  enemiesKilled = 0;
 
   speedIndex   = 0;          // jedes Level startet in Normalgeschwindigkeit
+
+  // Endlos: Upgrades immer an. Normale Level: wie in der Level-Definition.
+  var upgradesOn = endlessMode ? true : !!levelDef.upgrades;
 
   uiRefreshTowerButtons();   // aktive Slot-Auswahl (Shop) auf die Buttons anwenden
   uiRefreshSpeed(gameSpeed());
   uiUpdateBtnStyles();
   uiUpdate(lives, gold, 0);
   uiSetWaveState('ready', 0);
-  uiInitUpgrade(!!levelDef.upgrades);
+  uiInitUpgrade(upgradesOn);
   uiHideOverlay();
 }
 
@@ -61,6 +70,8 @@ function upgradeCost() {
 // Maximum (UPGRADE_DEF.maxLevel) über "maxUpgradeLevel" anheben — z.B. erlauben
 // Level 4 & 5 eine zusätzliche Stufe.
 function maxUpgradeLevelForCurrent() {
+  // Endlos-Modus: erweiterte Obergrenze (wie die späten Level).
+  if (endlessMode) return ENDLESS_MAX_UPGRADE_LEVEL;
   var levelDef = LEVEL_DEFS[currentLevelIndex];
   return (levelDef && typeof levelDef.maxUpgradeLevel === 'number')
     ? levelDef.maxUpgradeLevel
@@ -68,6 +79,8 @@ function maxUpgradeLevelForCurrent() {
 }
 
 function canUpgrade() {
+  // Endlos-Modus: Upgrades sind immer verfügbar (kein Level-Flag maßgeblich).
+  if (endlessMode) return towerUpgradeLevel < maxUpgradeLevelForCurrent();
   var levelDef = LEVEL_DEFS[currentLevelIndex];
   return !!levelDef.upgrades && towerUpgradeLevel < maxUpgradeLevelForCurrent();
 }
@@ -266,10 +279,12 @@ function cycleGameSpeed() {
 
 // ─── Game Loop ────────────────────────────────────────────
 var lastTime = 0;
+var gameClock = 0; // läuft immer weiter (auch im Menü), für Pulsations-Animationen
 
 function gameLoop(timestamp) {
   var dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
+  gameClock += dt;
   // Simulation entsprechend der gewählten Geschwindigkeit beschleunigen.
   // Pro Schritt wird mit begrenztem dt simuliert, damit schnelle Gegner bei
   // 3× nicht durch Kollisions-/Pfadlogik "springen".
@@ -293,7 +308,15 @@ function update(dt) {
       lives--;
       tgHaptic('warning');
       uiUpdate(lives, gold, waveManager.currentWave);
-      if (lives <= 0) { awardTalersDefeat(); endGame('gameover'); return; }
+      if (lives <= 0) {
+        if (endlessMode) {
+          recordEndlessScore();   // Highscore werten, keine Taler
+        } else {
+          awardTalersDefeat();
+        }
+        endGame('gameover');
+        return;
+      }
     }
   }
 
@@ -302,6 +325,7 @@ function update(dt) {
     if (e.dead && !e.reachedEnd && !e._goldCounted) {
       e._goldCounted = true;
       gold += e.gold;
+      enemiesKilled++;
       uiUpdate(lives, gold, waveManager.currentWave);
     }
   }
@@ -315,6 +339,7 @@ function update(dt) {
   }
 
   updateChainBolts(dt);
+  updateParticles(dt);
 
   var newEnemies = [];
   for (var i = 0; i < enemies.length; i++) {
@@ -330,7 +355,11 @@ function update(dt) {
 
   if (waveManager.waveActive) {
     if (waveManager.checkWaveEnd(enemies)) {
-      if (waveManager.currentWave >= TOTAL_WAVES) {
+      if (endlessMode) {
+        // Endlos: kein Sieg — einfach die nächste Welle bereitstellen.
+        uiSetWaveState('ready', waveManager.currentWave);
+        uiUpdate(lives, gold, waveManager.currentWave);
+      } else if (waveManager.currentWave >= TOTAL_WAVES) {
         unlockNextLevel(currentLevelIndex);
         awardTalers();
         endGame('victory');
@@ -378,6 +407,28 @@ function awardTalersDefeat() {
   lastTalerReward = reward;
 }
 
+// ─── Endlos-Modus ─────────────────────────────────────────
+// Werte für die Anzeige im Game-Over-Overlay (vom Highscore-Ergebnis gesetzt).
+var lastEndlessWave  = 0;
+var lastEndlessKills = 0;
+var lastEndlessRecord = false; // true, wenn der Lauf einen neuen Rekord setzte
+
+// Startet einen Endlos-Lauf: feste Startwerte, Upgrades an, prozedurale Wellen.
+function startEndless() {
+  endlessMode = true;
+  init();
+  tgHaptic('medium');
+}
+
+// Wertet den Endlos-Highscore bei Game Over aus. Die erreichte Welle ist die
+// höchste gestartete (waveManager.currentWave). Setzt lastEndless* für das
+// Overlay und speichert bei Verbesserung den Rekord.
+function recordEndlessScore() {
+  lastEndlessWave  = waveManager.currentWave;
+  lastEndlessKills = enemiesKilled;
+  lastEndlessRecord = trySetEndlessHigh(lastEndlessWave, lastEndlessKills);
+}
+
 function endGame(result) {
   gameState = result;
   uiSetWaveState(result, waveManager.currentWave);
@@ -423,6 +474,7 @@ function draw() {
   for (var i = 0; i < projectiles.length; i++) projectiles[i].draw(ctx);
   drawChainBolts(ctx);
   for (var i = 0; i < enemies.length; i++) enemies[i].draw(ctx);
+  drawParticles(ctx);
 }
 
 // ─── Start ────────────────────────────────────────────────

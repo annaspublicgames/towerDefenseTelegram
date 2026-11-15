@@ -10,6 +10,15 @@ function WaveManager() {
 }
 
 WaveManager.prototype.startNextWave = function () {
+  if (typeof endlessMode !== 'undefined' && endlessMode) {
+    // Endlos: die nächste Welle wird prozedural erzeugt, es gibt kein Ende.
+    this.currentWave++;
+    this._def       = makeEndlessWave(this.currentWave);
+    this.spawnQueue = this._def.count;
+    this.spawnTimer = 0;
+    this.waveActive = true;
+    return true;
+  }
   if (this.currentWave >= WAVE_DEFS.length) return false;
   this._def       = WAVE_DEFS[this.currentWave];
   this.currentWave++;

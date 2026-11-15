@@ -63,7 +63,7 @@
     }
 
     #overlay {
-      display: none;
+      display: flex;
       position: absolute;
       inset: 0;
       background: rgba(0,0,0,0.75);
@@ -72,8 +72,26 @@
       flex-direction: column;
       gap: 16px;
       border-radius: 2px;
+      /* Nur Einblenden animiert; Ausblenden sofort. */
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0s, visibility 0s;
     }
-    #overlay.active { display: flex; }
+    #overlay.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 0.28s ease;
+    }
+    /* Inhalt leicht hochgleiten lassen beim Erscheinen */
+    #overlay .overlay-btns, #overlay h2, #overlay p {
+      transform: translateY(8px);
+      transition: transform 0.3s ease;
+    }
+    #overlay.active .overlay-btns,
+    #overlay.active h2,
+    #overlay.active p { transform: translateY(0); }
     #overlay h2 { font-size: 2.4rem; }
     #overlay h2.win  { color: #6eff6e; }
     #overlay h2.lose { color: #ff6e6e; }
@@ -247,15 +265,29 @@
 
     /* ─── Level-Auswahl-Seite ─────────────────────────────────── */
     #level-select {
-      display: none;
+      display: block;
       position: fixed;
       inset: 0;
       z-index: 50;
-      background: #1a1a2e;
+      background: #1a1a41;
       overflow-y: auto;
       padding: calc(40px + env(safe-area-inset-top, 0px)) 16px 32px;
+      /* Ausblenden ohne Übergang: sofort weg, damit das Spielfeld nicht
+         durch das noch verblassende (undurchsichtige) Panel "aufblitzt". */
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(10px);
+      transition: opacity 0s, visibility 0s, transform 0s;
     }
-    #level-select.active { display: block; }
+    #level-select.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+      /* Nur das Einblenden wird animiert. */
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
 
     #level-select-inner {
       max-width: 520px;
@@ -304,6 +336,15 @@
     .level-card .level-name { font-size: 1.1rem; font-weight: bold; }
     .level-card .level-desc { font-size: 0.82rem; color: #9aa5c0; }
 
+    /* Endlos-Karte: eigener Akzent, abgesetzt von den Leveln */
+    .level-card.endless-card {
+      margin-top: 8px;
+      border-color: #8a5bd6;
+      background: linear-gradient(135deg, #241a3e, #1a1a41);
+    }
+    .level-card.endless-card:hover { background: #2a2050; border-color: #a97fe8; }
+    .level-card.endless-card .level-num { color: #c8a8ff; }
+
     /* ─── Shop-Einstieg (Button auf der Level-Auswahl) ────────── */
     .shop-open-btn {
       width: 100%;
@@ -323,15 +364,28 @@
 
     /* ─── Shop-Seite ──────────────────────────────────────────── */
     #shop-screen {
-      display: none;
+      display: block;
       position: fixed;
       inset: 0;
       z-index: 60;
       background: #1a1a2e;
       overflow-y: auto;
       padding: calc(40px + env(safe-area-inset-top, 0px)) 16px 32px;
+      /* Ausblenden ohne Übergang (siehe #level-select). */
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(10px);
+      transition: opacity 0s, visibility 0s, transform 0s;
     }
-    #shop-screen.active { display: block; }
+    #shop-screen.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+      /* Nur das Einblenden wird animiert. */
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
 
     #shop-inner {
       max-width: 520px;
@@ -416,6 +470,13 @@
     }
 
     /* ─── Mobiles Layout: schmale Bildschirme ─────────────────── */
+    /* Beim allerersten Laden Übergänge der Vollbild-Menüs unterdrücken,
+       damit der Startzustand (Level-Auswahl sichtbar) sofort steht und nichts
+       hinein-/herausfadet. Wird per JS nach dem ersten Frame entfernt. */
+    body.no-anim #level-select,
+    body.no-anim #shop-screen,
+    body.no-anim #overlay { transition: none !important; }
+
     @media (max-width: 820px) {
       /* Alles vertikal stapeln: Canvas oben, Steuerung darunter */
       #game-container {
@@ -463,11 +524,22 @@
     }
   </style>
 </head>
-<body>
+<body class="no-anim">
+  <script>
+    // Übergänge erst nach dem ersten gerenderten Frame erlauben, damit der
+    // Startzustand (Level-Auswahl) ohne Fade sofort steht.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        document.body.classList.remove('no-anim');
+      });
+    });
+  </script>
 
 
-  <!-- Level-Auswahl: Übersichtsseite zu Beginn des Spiels -->
-  <div id="level-select">
+  <!-- Level-Auswahl: Übersichtsseite zu Beginn des Spiels.
+       Startet mit "active", damit das Menü ab dem ersten Frame deckt und das
+       Spielfeld dahinter beim Laden nicht kurz aufblitzt. -->
+  <div id="level-select" class="active">
     <div id="level-select-inner">
       <h1 class="ls-title">🏰 Tower Defense</h1>
       <p class="ls-sub">Wähle ein Level</p>
@@ -568,12 +640,14 @@
   <!-- Reihenfolge ist wichtig: Abhängigkeiten zuerst, game.js zuletzt -->
   <script src="js/telegram.js"></script>
   <script src="js/constants.js"></script>
+  <script src="js/endless.js"></script>
   <script src="js/meta.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/pathfinder.js"></script>
   <script src="js/grid.js"></script>
   <script src="js/enemy.js"></script>
   <script src="js/tower.js"></script>
+  <script src="js/effects.js"></script>
   <script src="js/wave.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/levels.js"></script>

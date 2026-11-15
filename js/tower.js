@@ -19,6 +19,7 @@ Projectile.prototype.update = function (dt, enemies) {
 
   if (dist < this.speed * dt + 2) {
     this.dead = true;
+    if (typeof spawnHit === 'function') spawnHit(tx, ty, this.color);
     if (this.def.splashR > 0) {
       // Flächenschaden (Splash-Turm): trifft alle Gegner im Radius.
       var splashPx = this.def.splashR * CELL;
@@ -114,10 +115,21 @@ Projectile.prototype._nearestEnemy = function (x, y, enemies, exclude, maxDist) 
 
 Projectile.prototype.draw = function (ctx) {
   if (this.dead) return;
+  ctx.save();
+  // Weicher Schein in Projektilfarbe
+  ctx.shadowColor = this.color;
+  ctx.shadowBlur  = 10;
+  ctx.fillStyle   = this.color;
   ctx.beginPath();
   ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
-  ctx.fillStyle = this.color;
   ctx.fill();
+  // Heller Kern (ohne Schatten) für mehr "Energie"
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath();
+  ctx.arc(this.x, this.y, 1.8, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
 };
 
 // ─── Blitz-Linien (kurzlebiger Ketteneffekt) ──────────────

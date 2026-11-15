@@ -61,6 +61,7 @@ Enemy.prototype.takeDamage = function (dmg) {
   if (this.hp <= 0) {
     this.hp = 0;
     this.dead = true;
+    if (typeof spawnDeath === 'function') spawnDeath(this.x, this.y, this.color);
     this.deathFlash = true;        // "deathFlash" = Death-Animation läuft noch
     // Dauer = Anzahl Death-Frames / FPS
     this.deathTimer = ORC_SPRITES.death.frames / this.deathFps;

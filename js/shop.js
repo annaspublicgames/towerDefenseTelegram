@@ -7,12 +7,14 @@
  */
 
 // Öffnet den Shop (blendet die Level-Auswahl aus, Shop ein).
+// Der Wechsel erfolgt ohne Fade, damit das Spielfeld nicht kurz durchblitzt.
 function showShop() {
   gameState = 'menu';
-  hideLevelSelect();
-  var screen = document.getElementById('shop-screen');
   renderShop();
-  screen.classList.add('active');
+  instantPanelSwap(function () {
+    hideLevelSelect();
+    document.getElementById('shop-screen').classList.add('active');
+  });
 }
 
 function hideShop() {
@@ -141,7 +143,10 @@ function shopInit() {
   });
   var backBtn = document.getElementById('shop-back-btn');
   if (backBtn) backBtn.addEventListener('click', function () {
-    hideShop();
-    showLevelSelect();
+    // Wechsel Shop → Level-Auswahl ohne Fade (kein Durchblitzen des Spielfelds).
+    instantPanelSwap(function () {
+      hideShop();
+      showLevelSelect();
+    });
   });
 }

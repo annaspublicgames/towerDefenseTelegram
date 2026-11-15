@@ -70,6 +70,23 @@ function showLevelSelect() {
     })(i);
   }
 
+  // Endlos-Karte (immer freigeschaltet) unter den normalen Leveln.
+  var high = (typeof getEndlessHigh === 'function') ? getEndlessHigh() : null;
+  var highText = high
+    ? 'Rekord: Welle ' + high.wave + ' · ' + high.kills + ' Kills'
+    : 'Noch kein Rekord — spiel den ersten!';
+  var endlessCard = document.createElement('button');
+  endlessCard.className = 'level-card endless-card';
+  endlessCard.innerHTML =
+    '<span class="level-num">♾️</span>' +
+    '<span class="level-name">Endlos-Modus</span>' +
+    '<span class="level-desc">Immer stärkere Wellen · ' + highText + '</span>';
+  endlessCard.addEventListener('click', function () {
+    startEndless();
+    hideLevelSelect();
+  });
+  list.appendChild(endlessCard);
+
   screen.classList.add('active');
 }
 
@@ -77,8 +94,24 @@ function hideLevelSelect() {
   document.getElementById('level-select').classList.remove('active');
 }
 
+// Führt einen Wechsel zwischen zwei Vollbild-Menüs (Level-Auswahl ↔ Shop)
+// ohne Ein-/Ausblenden durch. Beide Panels sind deckend; ein Fade würde kurz
+// das Spielfeld dahinter durchscheinen lassen. Während "fn" läuft, ist die
+// no-anim-Klasse aktiv; sie wird nach einem Frame wieder entfernt, damit
+// spätere Übergänge (z.B. ins Spiel) weiter animiert sind.
+function instantPanelSwap(fn) {
+  document.body.classList.add('no-anim');
+  fn();
+  // Reflow erzwingen, damit no-anim für diesen Tausch garantiert greift.
+  void document.body.offsetWidth;
+  requestAnimationFrame(function () {
+    document.body.classList.remove('no-anim');
+  });
+}
+
 // Startet ein Level: aktives Level setzen, Übersicht ausblenden, Spiel init.
 function startLevel(levelIndex) {
+  endlessMode = false;         // normale Level: Endlos-Modus deaktivieren
   currentLevelIndex = levelIndex;
   var def = LEVEL_DEFS[levelIndex];
   WAVE_DEFS   = def.waves;

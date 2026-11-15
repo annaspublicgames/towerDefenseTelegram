@@ -73,6 +73,37 @@ var TALER_REPEAT_FACTOR = 0.25; // Wiederholung gibt 25 %
 // gehen hier nicht ein (man hat ja verloren); Basis ist TALER_BASE + Level.
 var TALER_DEFEAT_FACTOR = 0.4;  // max. 40 % der Grundbelohnung bei fast geschafft
 
+// ─── Endlos-Modus ─────────────────────────────────────────
+// Prozedural erzeugte, endlos stärker werdende Wellen. Keine Siegbedingung;
+// das Spiel endet erst bei 0 Leben. Gewertet wird nach erreichter Welle
+// (primär) und getöteten Gegnern (sekundär). Keine Taler.
+var ENDLESS_START_GOLD  = 600;
+var ENDLESS_START_LIVES = 20;
+var ENDLESS_MAX_UPGRADE_LEVEL = 5; // erweiterte Upgrade-Obergrenze im Endlos-Modus
+
+// Skalierungs-Parameter der prozeduralen Wellen (n = 1-basierte Wellennummer).
+var ENDLESS_CFG = {
+  // Gegneranzahl: wächst langsam und wird gedeckelt.
+  countBase:     10,
+  countPerWave:  0.8,
+  countMax:      70,
+  // HP: exponentielles Wachstum (fordernd, aber mit Shop/Upgrades machbar).
+  hpBase:        70,
+  hpGrowth:      1.14,   // je Welle ×
+  // Tempo: steigt leicht, mit Obergrenze.
+  speedBase:     1.9,
+  speedPerWave:  0.045,
+  speedMax:      5.2,
+  // Gold je Kill: steigt leicht mit der Welle.
+  goldBase:      8,
+  goldPerWave:   0.5,
+  goldMax:       45,
+  // Spawn-Intervall: sinkt mit der Welle, mit Untergrenze.
+  intervalBase:  1.1,
+  intervalDecay: 0.03,
+  intervalMin:   0.28
+};
+
 // ─── Turm-Upgrade ─────────────────────────────────────────
 // In Leveln mit "upgrades:true" kann ein globales Upgrade gekauft werden:
 // Es verstärkt ALLE Türme (auch bereits platzierte) um eine Stufe.

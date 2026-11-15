@@ -226,7 +226,10 @@ function uiShowOverlay(type, gold) {
     var k = (typeof lastEndlessKills === 'number') ? lastEndlessKills : 0;
     var high = (typeof getEndlessHigh === 'function') ? getEndlessHigh() : null;
     var recordLine = high ? ' · Bestmarke: Welle ' + high.wave + ' (' + high.kills + ' Kills)' : '';
-    msg.textContent = 'Welle ' + w + ' erreicht · ' + k + ' Gegner besiegt' + recordLine;
+    var er = (typeof lastTalerReward === 'number') ? lastTalerReward : 0;
+    var talerLine = er > 0 ? ' · +' + er + ' Taler 🪙' : '';
+    msg.textContent = 'Welle ' + w + ' erreicht · ' + k + ' Gegner besiegt' +
+                      talerLine + recordLine;
 
     nextBtn.style.display = 'none';
     restartBtn.textContent = 'Nochmal';

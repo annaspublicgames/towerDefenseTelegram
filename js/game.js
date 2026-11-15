@@ -427,6 +427,13 @@ function recordEndlessScore() {
   lastEndlessWave  = waveManager.currentWave;
   lastEndlessKills = enemiesKilled;
   lastEndlessRecord = trySetEndlessHigh(lastEndlessWave, lastEndlessKills);
+
+  // Taler-Belohnung nach abgeschlossenen Wellen. Die laufende (verlorene)
+  // Welle zählt nicht mit.
+  var wavesCleared = Math.max(0, waveManager.currentWave - 1);
+  var reward = wavesCleared * ENDLESS_TALER_PER_WAVE;
+  if (reward > 0) addTalers(reward);
+  lastTalerReward = reward;   // für die Anzeige im Overlay
 }
 
 function endGame(result) {

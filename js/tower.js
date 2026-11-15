@@ -163,22 +163,60 @@ function drawChainBolts(ctx) {
   }
 }
 
-// Berechnet die effektiven Turmwerte aus der Basis-Definition und der
-// globalen Upgrade-Stufe. Mutiert TOWER_DEFS nicht, sondern liefert eine Kopie.
-function computeTowerDef(type, level) {
-  var base = TOWER_DEFS[type];
-  var def = {};
-  for (var k in base) { if (base.hasOwnProperty(k)) def[k] = base[k]; }
-  if (level > 0) {
-    def.damage   = Math.round(base.damage   * Math.pow(UPGRADE_DEF.damageMult,   level));
-    def.range    = base.range    * Math.pow(UPGRADE_DEF.rangeMult,    level);
-    def.fireRate = base.fireRate * Math.pow(UPGRADE_DEF.fireRateMult, level);
-    if (base.slowFactor < 1) {
-      def.slowDur    = base.slowDur + UPGRADE_DEF.slowDurBonus * level;
-      def.slowFactor = base.slowFactor * Math.pow(UPGRADE_DEF.slowFactorMult, level);
+// Ermittelt den Shop-Slot (normal/splash/slow) zu einem Turmtyp. Basistypen
+// und ihre Varianten (poison/chain/ice) gehören zum selben Slot.
+function slotForType(type) {
+  for (var slot in TOWER_SLOTS) {
+    if (!TOWER_SLOTS.hasOwnProperty(slot)) continue;
+    if (TOWER_SLOTS[slot].base === type || TOWER_SLOTS[slot].variant === type) {
+      return slot;
     }
   }
+  return null;
+}
+
+// Berechnet die effektiven Turmwerte aus der Basis-Definition, dem permanenten
+// Grundlevel des Slots (Shop, Taler) und der globalen Ingame-Upgrade-Stufe.
+// Beide Verstärkungen wirken multiplikativ: zuerst das Grundlevel auf die
+// Basiswerte, dann das Gold-Upgrade obendrauf. Mutiert TOWER_DEFS nicht.
+function computeTowerDef(type, level) {
+  var base = TOWER_DEFS[type];
+
+  // Permanentes Grundlevel des zugehörigen Slots (0, falls nichts gekauft).
+  var slot = (typeof slotForType === 'function') ? slotForType(type) : null;
+  var baseLvl = (slot && typeof getBaseLevel === 'function') ? getBaseLevel(slot) : 0;
+
+  // 1. Grundlevel auf die Basiswerte anwenden → "verstärkte Basis".
+  var b = {};
+  for (var k in base) { if (base.hasOwnProperty(k)) b[k] = base[k]; }
+  if (baseLvl > 0) {
+    b.damage   = base.damage   * Math.pow(BASE_LEVEL_DEF.damageMult,   baseLvl);
+    b.range    = base.range    * Math.pow(BASE_LEVEL_DEF.rangeMult,    baseLvl);
+    b.fireRate = base.fireRate * Math.pow(BASE_LEVEL_DEF.fireRateMult, baseLvl);
+    if (base.slowFactor < 1) {
+      b.slowDur    = base.slowDur + BASE_LEVEL_DEF.slowDurBonus * baseLvl;
+      b.slowFactor = base.slowFactor * Math.pow(BASE_LEVEL_DEF.slowFactorMult, baseLvl);
+    }
+  }
+
+  // 2. Ingame-Gold-Upgrade (level) multiplikativ auf die verstärkte Basis.
+  var def = {};
+  for (var k2 in b) { if (b.hasOwnProperty(k2)) def[k2] = b[k2]; }
+  if (level > 0) {
+    def.damage   = b.damage   * Math.pow(UPGRADE_DEF.damageMult,   level);
+    def.range    = b.range    * Math.pow(UPGRADE_DEF.rangeMult,    level);
+    def.fireRate = b.fireRate * Math.pow(UPGRADE_DEF.fireRateMult, level);
+    if (base.slowFactor < 1) {
+      def.slowDur    = b.slowDur + UPGRADE_DEF.slowDurBonus * level;
+      def.slowFactor = b.slowFactor * Math.pow(UPGRADE_DEF.slowFactorMult, level);
+    }
+  }
+
+  // Schaden auf ganze Zahl runden (wie bisher).
+  def.damage = Math.round(def.damage);
+
   def.upgradeLevel = level;
+  def.baseLevel    = baseLvl;
   return def;
 }
 

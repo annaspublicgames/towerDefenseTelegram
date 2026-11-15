@@ -145,3 +145,52 @@ function markLevelCleared(idx) {
     _metaWrite(CLEARED_KEY, csv);
   }
 }
+
+// ─── Permanentes Turm-Grundlevel je Slot ──────────────────
+// Speicherformat: CSV aus "slot:level"-Paaren, z.B. "normal:3,slow:1".
+// Ohne Eintrag gilt Grundlevel 0.
+var BASE_LEVELS_KEY = 'td_base_levels';
+var _baseLevelsFallback = '';
+
+function _getBaseLevelsMap() {
+  var map = {};
+  var pairs = _csvToArray(_metaRead(BASE_LEVELS_KEY, _baseLevelsFallback));
+  for (var i = 0; i < pairs.length; i++) {
+    var kv = pairs[i].split(':');
+    if (kv.length === 2) {
+      var lvl = parseInt(kv[1], 10);
+      if (!isNaN(lvl) && lvl > 0) map[kv[0]] = lvl;
+    }
+  }
+  return map;
+}
+
+function _saveBaseLevelsMap(map) {
+  var pairs = [];
+  for (var slot in map) {
+    if (map.hasOwnProperty(slot) && map[slot] > 0) pairs.push(slot + ':' + map[slot]);
+  }
+  var csv = _arrayToCsv(pairs);
+  _baseLevelsFallback = csv;
+  _metaWrite(BASE_LEVELS_KEY, csv);
+}
+
+function getBaseLevel(slot) {
+  var map = _getBaseLevelsMap();
+  return map.hasOwnProperty(slot) ? map[slot] : 0;
+}
+
+function setBaseLevel(slot, n) {
+  var map = _getBaseLevelsMap();
+  map[slot] = Math.max(0, Math.floor(n));
+  _saveBaseLevelsMap(map);
+}
+
+// Erhöht das Grundlevel eines Slots um 1 (bis maxLevel) und gibt das neue
+// Level zurück.
+function incBaseLevel(slot) {
+  var cur = getBaseLevel(slot);
+  if (cur >= BASE_LEVEL_DEF.maxLevel) return cur;
+  setBaseLevel(slot, cur + 1);
+  return cur + 1;
+}

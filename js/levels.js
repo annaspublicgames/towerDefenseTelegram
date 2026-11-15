@@ -80,7 +80,7 @@ function showLevelSelect() {
   endlessCard.innerHTML =
     '<span class="level-num">♾️</span>' +
     '<span class="level-name">Endlos-Modus</span>' +
-    '<span class="level-desc">Immer stärkere Wellen · ' + highText + '</span>';
+    '<span class="level-desc">Immer stärkere Wellen · Taler je Welle · ' + highText + '</span>';
   endlessCard.addEventListener('click', function () {
     startEndless();
     hideLevelSelect();

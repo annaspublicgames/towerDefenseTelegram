@@ -407,6 +407,7 @@
     .shop-card {
       display: flex;
       flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
       gap: 14px;
       width: 100%;
@@ -418,6 +419,34 @@
       text-align: left;
     }
     .shop-card.owned { border-color: #3a7bd5; }
+
+    /* Grundlevel-Bereich (eigene Zeile unter Icon/Info/Aktion) */
+    .base-level-row {
+      flex: 0 0 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid #2a3a5c;
+    }
+    .bl-info { display: flex; flex-direction: column; gap: 5px; }
+    .bl-label { font-size: 0.8rem; color: #cfe0ff; font-weight: bold; }
+    .bl-pips { display: flex; gap: 4px; }
+    .bl-pip {
+      width: 14px; height: 7px; border-radius: 2px;
+      background: #2a3a5c; display: inline-block;
+    }
+    .bl-pip.on { background: #e0a020; }
+    .bl-btn {
+      flex-shrink: 0;
+      background: #7a4fd6; color: #fff;
+      min-width: 92px;
+    }
+    .bl-btn:hover:not(:disabled) { background: #8f66e8; }
+    .bl-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .bl-btn.cant-afford { opacity: 0.45; cursor: not-allowed; }
 
     .shop-icon-wrap {
       width: 56px;

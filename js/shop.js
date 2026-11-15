@@ -98,11 +98,64 @@ function renderShop() {
       card.appendChild(iconWrap);
       card.appendChild(info);
       card.appendChild(action);
+
+      // ─── Grundlevel-Bereich (permanent, mit Talern) ───
+      card.appendChild(buildBaseLevelRow(entry.slot));
+
       list.appendChild(card);
 
       drawShopIcon(icon, entry.variant);
     })(VARIANT_SHOP[i]);
   }
+}
+
+// Baut den Grundlevel-Bereich einer Turm-Karte: Fortschrittsanzeige "X/5"
+// und einen Upgrade-Button mit Taler-Preis (bzw. "Max" bei voller Stufe).
+// Das Grundlevel gilt pro Slot und verstärkt Basis- wie Varianten-Turm.
+function buildBaseLevelRow(slot) {
+  var row = document.createElement('div');
+  row.className = 'base-level-row';
+
+  var lvl = getBaseLevel(slot);
+  var max = BASE_LEVEL_DEF.maxLevel;
+
+  // Fortschritt: X/5 plus kleine Pips
+  var info = document.createElement('div');
+  info.className = 'bl-info';
+  var pips = '';
+  for (var i = 0; i < max; i++) {
+    pips += '<span class="bl-pip' + (i < lvl ? ' on' : '') + '"></span>';
+  }
+  info.innerHTML =
+    '<span class="bl-label">Grundlevel ' + lvl + '/' + max + '</span>' +
+    '<span class="bl-pips">' + pips + '</span>';
+  row.appendChild(info);
+
+  var btn = document.createElement('button');
+  btn.className = 'shop-btn bl-btn';
+  if (lvl >= max) {
+    btn.disabled = true;
+    btn.textContent = '✓ Max';
+  } else {
+    var cost = baseLevelCost(lvl);
+    btn.textContent = '⬆ 🪙 ' + cost;
+    if (getTalers() < cost) {
+      btn.disabled = true;
+      btn.classList.add('cant-afford');
+    }
+    btn.addEventListener('click', function () {
+      var price = baseLevelCost(getBaseLevel(slot));
+      if (getTalers() < price) return;
+      if (spendTalers(price)) {
+        incBaseLevel(slot);
+        tgHaptic('success');
+        renderShop();
+      }
+    });
+  }
+  row.appendChild(btn);
+
+  return row;
 }
 
 // Zeichnet den Sprite einer Variante in das Shop-Karten-Icon.

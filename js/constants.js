@@ -81,6 +81,11 @@ var ENDLESS_START_GOLD  = 600;
 var ENDLESS_START_LIVES = 20;
 var ENDLESS_MAX_UPGRADE_LEVEL = 5; // erweiterte Upgrade-Obergrenze im Endlos-Modus
 
+// Taler-Belohnung im Endlos-Modus: je abgeschlossener Welle gibt es Taler.
+// Gewertet werden die vollständig überstandenen Wellen (die letzte, bei der
+// man verliert, zählt nicht). Gewürdigt wird so der erreichte Fortschritt.
+var ENDLESS_TALER_PER_WAVE = 3;
+
 // Skalierungs-Parameter der prozeduralen Wellen (n = 1-basierte Wellennummer).
 var ENDLESS_CFG = {
   // Gegneranzahl: wächst langsam und wird gedeckelt.
@@ -120,6 +125,29 @@ var UPGRADE_DEF = {
   slowDurBonus:  0.8,  // +Sekunden Slow-Dauer je Stufe
   slowFactorMult:0.85  // Slow-Faktor je Stufe × (kleiner = stärker)
 };
+
+// ─── Permanentes Turm-Grundlevel (Shop, Taler) ────────────
+// Mit Talern im Shop dauerhaft kaufbar, pro Slot (normal/splash/slow),
+// 5 Stufen. Hebt die Basiswerte des Turms an (gilt in allen Spielen, auch im
+// Endlos). Die aktive Variante erbt das Grundlevel ihres Slots. Wirkt
+// multiplikativ VOR dem Ingame-Gold-Upgrade (UPGRADE_DEF).
+var BASE_LEVEL_DEF = {
+  maxLevel:       5,
+  damageMult:     1.12,  // Schaden je Stufe ×
+  rangeMult:      1.05,  // Reichweite je Stufe ×
+  fireRateMult:   1.08,  // Feuerrate je Stufe ×
+  slowDurBonus:   0.5,   // +Sekunden Slow-Dauer je Stufe (Slow/Eis)
+  slowFactorMult: 0.90,  // Slow-Faktor je Stufe × (kleiner = stärker)
+  // Steigender Preis je Stufe (in Talern): baseCost × growth^(level)
+  baseCost:       80,
+  costGrowth:     1.9
+};
+
+// Taler-Preis, um ein Slot-Grundlevel von "level" auf "level+1" zu heben.
+function baseLevelCost(level) {
+  return Math.round(BASE_LEVEL_DEF.baseCost *
+                    Math.pow(BASE_LEVEL_DEF.costGrowth, level));
+}
 
 // ─── Level-Definitionen ───────────────────────────────────
 // Jedes Level besitzt einen Namen, Start-Gold, Start-Leben und seine Wellen.
@@ -234,6 +262,59 @@ var LEVEL_DEFS = [
       { count: 56, hp:12800, speed:4.7, gold: 50, color:'#00e5ff', spawnInterval:0.34},
       { count: 62, hp:16500, speed:4.8, gold: 56, color:'#ffd700', spawnInterval:0.32},
       { count: 70, hp:21000, speed:5.0, gold: 70, color:'#ffffff', spawnInterval:0.3 }
+    ]
+  },
+  {
+    name: 'Level 6',
+    desc: 'Verdammnis · Turm-Upgrades (5 Stufen)',
+    startGold: 950,
+    startLives: 12,
+    upgrades: true,
+    maxUpgradeLevel: 5,
+    waves: [
+      { count: 28, hp:  700, speed:3.2, gold: 22, color:'#ff6666', spawnInterval:0.62},
+      { count: 30, hp:  950, speed:3.3, gold: 24, color:'#ff8844', spawnInterval:0.58},
+      { count: 32, hp: 1280, speed:3.5, gold: 26, color:'#ffaa44', spawnInterval:0.54},
+      { count: 34, hp: 1700, speed:3.6, gold: 28, color:'#dddd44', spawnInterval:0.5 },
+      { count: 36, hp: 2250, speed:3.8, gold: 30, color:'#aaff44', spawnInterval:0.48},
+      { count: 38, hp: 2950, speed:3.9, gold: 32, color:'#44ffaa', spawnInterval:0.46},
+      { count: 40, hp: 3850, speed:4.1, gold: 34, color:'#44aaff', spawnInterval:0.44},
+      { count: 42, hp: 5000, speed:4.2, gold: 36, color:'#8844ff', spawnInterval:0.42},
+      { count: 44, hp: 6500, speed:4.4, gold: 38, color:'#ff44cc', spawnInterval:0.4 },
+      { count: 46, hp: 8400, speed:4.5, gold: 40, color:'#ff8822', spawnInterval:0.38},
+      { count: 50, hp:10900, speed:4.7, gold: 44, color:'#ff2222', spawnInterval:0.36},
+      { count: 54, hp:14100, speed:4.8, gold: 48, color:'#cc00ff', spawnInterval:0.34},
+      { count: 58, hp:18300, speed:5.0, gold: 52, color:'#00e5ff', spawnInterval:0.32},
+      { count: 64, hp:23700, speed:5.1, gold: 58, color:'#ffd700', spawnInterval:0.3 },
+      { count: 72, hp:30700, speed:5.3, gold: 66, color:'#ff5577', spawnInterval:0.28},
+      { count: 82, hp:39800, speed:5.5, gold: 80, color:'#ffffff', spawnInterval:0.26}
+    ]
+  },
+  {
+    name: 'Level 7',
+    desc: 'Apokalypse · Turm-Upgrades (5 Stufen)',
+    startGold: 1100,
+    startLives: 10,
+    upgrades: true,
+    maxUpgradeLevel: 5,
+    waves: [
+      { count: 32, hp: 1050, speed:3.4, gold: 24, color:'#ff6666', spawnInterval:0.55},
+      { count: 34, hp: 1450, speed:3.6, gold: 26, color:'#ff8844', spawnInterval:0.52},
+      { count: 36, hp: 1950, speed:3.7, gold: 28, color:'#ffaa44', spawnInterval:0.5 },
+      { count: 38, hp: 2600, speed:3.9, gold: 30, color:'#dddd44', spawnInterval:0.48},
+      { count: 40, hp: 3450, speed:4.0, gold: 32, color:'#aaff44', spawnInterval:0.46},
+      { count: 42, hp: 4550, speed:4.2, gold: 34, color:'#44ffaa', spawnInterval:0.44},
+      { count: 44, hp: 6000, speed:4.3, gold: 36, color:'#44aaff', spawnInterval:0.42},
+      { count: 46, hp: 7900, speed:4.5, gold: 38, color:'#8844ff', spawnInterval:0.4 },
+      { count: 48, hp:10400, speed:4.7, gold: 40, color:'#ff44cc', spawnInterval:0.38},
+      { count: 50, hp:13700, speed:4.8, gold: 44, color:'#ff8822', spawnInterval:0.36},
+      { count: 54, hp:18000, speed:5.0, gold: 48, color:'#ff2222', spawnInterval:0.34},
+      { count: 58, hp:23700, speed:5.2, gold: 52, color:'#cc00ff', spawnInterval:0.32},
+      { count: 62, hp:31200, speed:5.3, gold: 58, color:'#00e5ff', spawnInterval:0.3 },
+      { count: 68, hp:41000, speed:5.5, gold: 64, color:'#ffd700', spawnInterval:0.28},
+      { count: 76, hp:54000, speed:5.7, gold: 72, color:'#ff5577', spawnInterval:0.26},
+      { count: 86, hp:71000, speed:5.9, gold: 84, color:'#b0f0ff', spawnInterval:0.24},
+      { count:100, hp:95000, speed:6.1, gold:120, color:'#ffffff', spawnInterval:0.22}
     ]
   }
 ];

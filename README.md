@@ -37,6 +37,12 @@ Online (GitHub Pages): siehe die Pages-URL dieses Repos.
   - **Blitzturm** (ersetzt Splash): Blitz springt auf weitere nahe Gegner (Kette).
   - **Eiskanone** (ersetzt Slow): verlangsamt das Ziel und zusätzlich alle
     Gegner im Umkreis des Einschlags (Flächen-Verlangsamung).
+  - **Permanentes Grundlevel:** Pro Turm-Slot lässt sich im Shop mit Talern ein
+    dauerhaftes Grundlevel (5 Stufen, steigende Preise) kaufen, das die
+    Basiswerte (Schaden, Reichweite, Feuerrate, bei Slow/Eis auch die
+    Verlangsamung) anhebt. Gilt in allen Spielen inkl. Endlos und kombiniert
+    sich multiplikativ mit dem Ingame-Gold-Upgrade. Die aktive Variante erbt das
+    Grundlevel ihres Slots.
 - Gold- und Leben-System
 - Animierte Orc- und Turm-Sprites
 - Touch-Steuerung (Tippen = platzieren, langer Druck = verkaufen)

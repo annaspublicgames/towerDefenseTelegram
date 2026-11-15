@@ -1,7 +1,7 @@
 /**
  * UI — HUD, Turmauswahl, Wellen-Button, Overlay.
  */
-var hudLives, hudGold, hudWave, waveInfoEl, btnWave, btnUpgrade;
+var hudLives, hudGold, hudWave, waveInfoEl, btnWave, btnUpgrade, btnSpeed;
 var towerBtns = {};
 var selectedTowerType = null;
 
@@ -12,6 +12,7 @@ function uiInit(onTowerSelect, onStartWave, onRestart) {
   waveInfoEl = document.getElementById('wave-info');
   btnWave    = document.getElementById('btn-start-wave');
   btnUpgrade = document.getElementById('btn-upgrade');
+  btnSpeed   = document.getElementById('btn-speed');
 
   towerBtns.normal = document.getElementById('btn-tower-normal');
   towerBtns.splash = document.getElementById('btn-tower-splash');
@@ -48,7 +49,18 @@ function uiInit(onTowerSelect, onStartWave, onRestart) {
     upgradeTowers();
   });
 
+  if (btnSpeed) btnSpeed.addEventListener('click', function () {
+    cycleGameSpeed();
+  });
+
   uiDrawTowerIcons();
+}
+
+// Aktualisiert die Beschriftung des Geschwindigkeits-Buttons (1× / 2× / 3×).
+function uiRefreshSpeed(speed) {
+  if (!btnSpeed) return;
+  btnSpeed.textContent = '⏩ ' + speed + '×';
+  btnSpeed.classList.toggle('fast', speed > 1);
 }
 
 // Blendet den Upgrade-Button je nach Level ein/aus (nur Level mit upgrades:true).
@@ -61,7 +73,9 @@ function uiInitUpgrade(enabled) {
 // Aktualisiert Beschriftung und Verfügbarkeit des Upgrade-Buttons.
 function uiRefreshUpgrade() {
   if (!btnUpgrade || btnUpgrade.style.display === 'none') return;
-  if (towerUpgradeLevel >= UPGRADE_DEF.maxLevel) {
+  var maxLvl = (typeof maxUpgradeLevelForCurrent === 'function')
+    ? maxUpgradeLevelForCurrent() : UPGRADE_DEF.maxLevel;
+  if (towerUpgradeLevel >= maxLvl) {
     btnUpgrade.disabled = true;
     btnUpgrade.textContent = '⬆ Upgrade max (Stufe ' + towerUpgradeLevel + ')';
     return;
@@ -73,13 +87,15 @@ function uiRefreshUpgrade() {
                         gameState !== 'playing';
 }
 
-// Zeichnet den ersten (statischen) Frame jedes Turm-Spritesheets in das
-// Icon-Canvas des jeweiligen Kauf-Buttons.
+// Zeichnet das Icon jedes Kauf-Buttons. Pro Slot wird der aktuell aktive
+// Turmtyp (Basis oder freigeschaltete Variante) dargestellt.
 function uiDrawTowerIcons() {
-  ['normal','splash','slow'].forEach(function (type) {
-    var canvas = towerBtns[type].querySelector('.tower-icon');
+  ['normal','splash','slow'].forEach(function (slot) {
+    var canvas = towerBtns[slot].querySelector('.tower-icon');
     if (!canvas) return;
+    var type   = (typeof activeTypeForSlot === 'function') ? activeTypeForSlot(slot) : slot;
     var sprite = TOWER_SPRITES[type];
+    if (!sprite) return;
 
     function render() {
       // Interne Auflösung an das CSS-Maß koppeln (scharf auf allen Displays)
@@ -91,21 +107,44 @@ function uiDrawTowerIcons() {
 
       var ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Nur den ersten Frame (statisch) aus dem Spritesheet zeichnen
-      ctx.drawImage(
-        sprite.img,
-        0, 0, TOWER_FRAME_W, TOWER_FRAME_H,   // Quelle: Frame 0
-        0, 0, canvas.width, canvas.height     // Ziel: ganzes Canvas
-      );
+      if (sprite.static) {
+        // Statisches Einzelbild: ganzes Bild, quadratisch unten zentriert.
+        var side = Math.min(canvas.width, canvas.height);
+        var dx = (canvas.width  - side) / 2;
+        var dy = canvas.height - side;
+        ctx.drawImage(sprite.img, 0, 0, sprite.img.width, sprite.img.height,
+                      dx, dy, side, side);
+      } else {
+        // Erster Frame des 70x130-Spritesheets.
+        ctx.drawImage(sprite.img,
+          0, 0, TOWER_FRAME_W, TOWER_FRAME_H,
+          0, 0, canvas.width, canvas.height);
+      }
     }
 
     if (sprite.loaded) {
       render();
     } else {
-      // Bild evtl. noch nicht fertig geladen → nachträglich zeichnen
       sprite.img.addEventListener('load', render);
     }
   });
+}
+
+// Aktualisiert Name und Kosten jedes Kauf-Buttons entsprechend dem aktuell
+// aktiven Turmtyp je Slot (Basis oder freigeschaltete Variante).
+function uiRefreshTowerButtons() {
+  ['normal','splash','slow'].forEach(function (slot) {
+    var btn  = towerBtns[slot];
+    if (!btn) return;
+    var type = (typeof activeTypeForSlot === 'function') ? activeTypeForSlot(slot) : slot;
+    var def  = TOWER_DEFS[type];
+    if (!def) return;
+    var nameEl = btn.querySelector('.tname');
+    var costEl = btn.querySelector('.tcost');
+    if (nameEl) nameEl.textContent = def.name;
+    if (costEl) costEl.textContent = '💰 ' + def.cost;
+  });
+  uiDrawTowerIcons();
 }
 
 function uiUpdateBtnStyles() {
@@ -119,8 +158,9 @@ function uiUpdate(lives, gold, waveNum) {
   hudGold.textContent  = gold;
   hudWave.textContent  = waveNum + ' / ' + TOTAL_WAVES;
 
-  ['normal','splash','slow'].forEach(function (type) {
-    towerBtns[type].classList.toggle('cant-afford', gold < TOWER_DEFS[type].cost);
+  ['normal','splash','slow'].forEach(function (slot) {
+    var type = (typeof activeTypeForSlot === 'function') ? activeTypeForSlot(slot) : slot;
+    towerBtns[slot].classList.toggle('cant-afford', gold < TOWER_DEFS[type].cost);
   });
 
   uiRefreshUpgrade();
@@ -155,20 +195,25 @@ function uiShowOverlay(type, gold) {
   if (type === 'victory') {
     title.className = 'win';
     title.textContent = '🏆 Sieg!';
+    var reward = (typeof lastTalerReward === 'number') ? lastTalerReward : 0;
+    var talerLine = reward > 0 ? ' · +' + reward + ' Taler 🪙' : '';
     var hasNext = hasNextLevel(currentLevelIndex);
     if (hasNext) {
       msg.textContent = LEVEL_DEFS[currentLevelIndex].name +
-        ' geschafft! Nächstes Level freigeschaltet.';
+        ' geschafft! Nächstes Level freigeschaltet.' + talerLine;
       nextBtn.style.display = '';
     } else {
-      msg.textContent = 'Alle Level gemeistert! Gold übrig: ' + gold;
+      msg.textContent = 'Alle Level gemeistert! Gold übrig: ' + gold + talerLine;
       nextBtn.style.display = 'none';
     }
     restartBtn.textContent = 'Nochmal';
   } else {
     title.className = 'lose';
     title.textContent = '💀 Game Over';
-    msg.textContent = 'Alle Leben verloren. Versuche es nochmal!';
+    var defeatReward = (typeof lastTalerReward === 'number') ? lastTalerReward : 0;
+    msg.textContent = defeatReward > 0
+      ? 'Alle Leben verloren. Für deinen Fortschritt: +' + defeatReward + ' Taler 🪙'
+      : 'Alle Leben verloren. Versuche es nochmal!';
     nextBtn.style.display = 'none';
     restartBtn.textContent = 'Neu starten';
   }

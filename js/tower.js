@@ -20,6 +20,7 @@ Projectile.prototype.update = function (dt, enemies) {
   if (dist < this.speed * dt + 2) {
     this.dead = true;
     if (this.def.splashR > 0) {
+      // Flächenschaden (Splash-Turm): trifft alle Gegner im Radius.
       var splashPx = this.def.splashR * CELL;
       for (var i = 0; i < enemies.length; i++) {
         if (enemies[i].dead) continue;
@@ -28,12 +29,13 @@ Projectile.prototype.update = function (dt, enemies) {
           enemies[i].takeDamage(this.def.damage);
         }
       }
+    } else if (this.def.chainTargets > 0) {
+      // Kette (Blitzturm): Hauptziel + bis zu N weitere nahe Gegner.
+      this._hitChain(enemies);
     } else {
+      // Einzelziel (Normal, Slow, Gift, Eis).
       if (!this.target.dead) {
-        this.target.takeDamage(this.def.damage);
-        if (this.def.slowFactor < 1) {
-          this.target.applySlow(this.def.slowFactor, this.def.slowDur);
-        }
+        this._applyHit(this.target, enemies);
       }
     }
     return;
@@ -43,6 +45,73 @@ Projectile.prototype.update = function (dt, enemies) {
   this.y += ny * this.speed * dt;
 };
 
+// Wendet Schaden und sämtliche Status-Effekte dieses Projektils auf einen
+// einzelnen Gegner an (Direktschaden, Verlangsamung, Gift, Flächen-Slow).
+Projectile.prototype._applyHit = function (enemy, enemies) {
+  if (!enemy || enemy.dead) return;
+  enemy.takeDamage(this.def.damage);
+
+  // Verlangsamung auf das Ziel.
+  if (this.def.slowFactor < 1) {
+    enemy.applySlow(this.def.slowFactor, this.def.slowDur);
+
+    // Eiskanone: zusätzlich Flächen-Verlangsamung aller Gegner im Umkreis.
+    if (this.def.slowSplashR > 0 && enemies) {
+      var rPx = this.def.slowSplashR * CELL;
+      for (var i = 0; i < enemies.length; i++) {
+        if (enemies[i].dead || enemies[i] === enemy) continue;
+        var dx = enemies[i].x - enemy.x, dy = enemies[i].y - enemy.y;
+        if (Math.sqrt(dx*dx + dy*dy) <= rPx) {
+          enemies[i].applySlow(this.def.slowFactor, this.def.slowDur);
+        }
+      }
+    }
+  }
+
+  // Giftturm: Schaden über Zeit.
+  if (this.def.dotDamage > 0) {
+    enemy.applyPoison(this.def.dotDamage, this.def.dotDuration);
+  }
+};
+
+// Blitzturm: trifft das Hauptziel und springt auf bis zu chainTargets weitere
+// Gegner über, jeweils der nächste noch nicht getroffene innerhalb chainRange.
+// Der Schaden nimmt pro Sprung leicht ab. Erzeugt kurzlebige Blitzlinien.
+Projectile.prototype._hitChain = function (enemies) {
+  var hitList = [];
+  var current = this.target;
+  if (!current || current.dead) {
+    // Hauptziel schon tot: nächsten Gegner am Einschlagpunkt suchen.
+    current = this._nearestEnemy(this.x, this.y, enemies, hitList, Infinity);
+  }
+  var maxHits = 1 + this.def.chainTargets;
+  var dmg = this.def.damage;
+  var prev = { x: this.x, y: this.y };
+
+  for (var n = 0; n < maxHits && current; n++) {
+    current.takeDamage(Math.round(dmg));
+    hitList.push(current);
+    _chainBolts.push({ x1:prev.x, y1:prev.y, x2:current.x, y2:current.y, life:0.12, maxLife:0.12 });
+    prev = { x: current.x, y: current.y };
+    dmg *= 0.8; // jeder Sprung etwas schwächer
+    current = this._nearestEnemy(prev.x, prev.y, enemies, hitList, this.def.chainRange * CELL);
+  }
+};
+
+// Nächster lebender Gegner zu (x,y), der noch nicht in "exclude" ist und
+// innerhalb maxDist liegt. Gibt null zurück, wenn keiner passt.
+Projectile.prototype._nearestEnemy = function (x, y, enemies, exclude, maxDist) {
+  var best = null, bestD = maxDist;
+  for (var i = 0; i < enemies.length; i++) {
+    var e = enemies[i];
+    if (e.dead || exclude.indexOf(e) !== -1) continue;
+    var dx = e.x - x, dy = e.y - y;
+    var d = Math.sqrt(dx*dx + dy*dy);
+    if (d <= bestD) { bestD = d; best = e; }
+  }
+  return best;
+};
+
 Projectile.prototype.draw = function (ctx) {
   if (this.dead) return;
   ctx.beginPath();
@@ -50,6 +119,37 @@ Projectile.prototype.draw = function (ctx) {
   ctx.fillStyle = this.color;
   ctx.fill();
 };
+
+// ─── Blitz-Linien (kurzlebiger Ketteneffekt) ──────────────
+// Werden von _hitChain befüllt und im Game-Loop gezeichnet/abgebaut.
+var _chainBolts = [];
+
+function updateChainBolts(dt) {
+  for (var i = 0; i < _chainBolts.length; i++) _chainBolts[i].life -= dt;
+  var kept = [];
+  for (var j = 0; j < _chainBolts.length; j++) {
+    if (_chainBolts[j].life > 0) kept.push(_chainBolts[j]);
+  }
+  _chainBolts = kept;
+}
+
+function drawChainBolts(ctx) {
+  for (var i = 0; i < _chainBolts.length; i++) {
+    var b = _chainBolts[i];
+    var alpha = Math.max(0, b.life / b.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#e8e0ff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#c8a8ff';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(b.x1, b.y1);
+    ctx.lineTo(b.x2, b.y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
 
 // Berechnet die effektiven Turmwerte aus der Basis-Definition und der
 // globalen Upgrade-Stufe. Mutiert TOWER_DEFS nicht, sondern liefert eine Kopie.
@@ -131,24 +231,38 @@ Tower.prototype.draw = function (ctx, showRange) {
   var sheet = TOWER_SPRITES[this.type];
 
   if (sheet && sheet.loaded) {
-    // Frame auswählen
-    var fi = Math.floor(this.animTime * this.animFps) % sheet.frames;
-    var sx = fi * TOWER_FRAME_W;
+    if (sheet.static) {
+      // Statisches Einzelbild (z.B. 64x64): ganzes Bild als ein Frame.
+      // Quadratisch auf ~1.3 Kacheln skaliert, auf der Kachel zentriert und
+      // leicht nach oben versetzt, damit es wie ein stehender Turm wirkt.
+      var sSize = CELL * 1.4;
+      var sdx = this.x - sSize / 2;
+      var sdy = (this.row * CELL + CELL) - sSize + 2;
+      ctx.drawImage(
+        sheet.img,
+        0, 0, sheet.img.width, sheet.img.height,
+        sdx, sdy, sSize, sSize
+      );
+    } else {
+      // Animiertes Spritesheet: einen 70x130-Frame auswählen.
+      var fi = Math.floor(this.animTime * this.animFps) % sheet.frames;
+      var sx = fi * TOWER_FRAME_W;
 
-    // Zielgröße: Breite ~ eine Kachel, Höhe proportional (130/70).
-    var drawW = CELL * 1.3;
-    var drawH = drawW * (TOWER_FRAME_H / TOWER_FRAME_W);
+      // Zielgröße: Breite ~ eine Kachel, Höhe proportional (130/70).
+      var drawW = CELL * 1.3;
+      var drawH = drawW * (TOWER_FRAME_H / TOWER_FRAME_W);
 
-    // Horizontal zentriert; vertikal so, dass die Basis knapp unter der
-    // Kachelmitte sitzt und der Turm nach oben herausragt.
-    var dx = this.x - drawW / 2;
-    var dy = (this.row * CELL + CELL) - drawH + 4;
+      // Horizontal zentriert; vertikal so, dass die Basis knapp unter der
+      // Kachelmitte sitzt und der Turm nach oben herausragt.
+      var dx = this.x - drawW / 2;
+      var dy = (this.row * CELL + CELL) - drawH + 4;
 
-    ctx.drawImage(
-      sheet.img,
-      sx, 0, TOWER_FRAME_W, TOWER_FRAME_H,
-      dx, dy, drawW, drawH
-    );
+      ctx.drawImage(
+        sheet.img,
+        sx, 0, TOWER_FRAME_W, TOWER_FRAME_H,
+        dx, dy, drawW, drawH
+      );
+    }
   } else {
     // Fallback: farbiges Quadrat mit Symbol, falls Sprite noch nicht geladen
     var x = this.col*CELL, y = this.row*CELL, s = CELL-6;

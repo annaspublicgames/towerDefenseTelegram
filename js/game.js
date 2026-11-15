@@ -27,11 +27,27 @@ function init() {
   selectedTowerType = null;
   towerUpgradeLevel = 0;
 
+  speedIndex   = 0;          // jedes Level startet in Normalgeschwindigkeit
+
+  uiRefreshTowerButtons();   // aktive Slot-Auswahl (Shop) auf die Buttons anwenden
+  uiRefreshSpeed(gameSpeed());
   uiUpdateBtnStyles();
   uiUpdate(lives, gold, 0);
   uiSetWaveState('ready', 0);
   uiInitUpgrade(!!levelDef.upgrades);
   uiHideOverlay();
+}
+
+// ─── Aktiver Turmtyp je Slot ──────────────────────────────
+// Ein Shop-Slot (normal/splash/slow) zeigt entweder seinen Basis-Turm oder
+// die freigeschaltete Variante, je nachdem, was im Shop aktiv gewählt wurde.
+// Ohne Freischaltung/Auswahl gilt immer der Basistyp (keine Regression).
+function activeTypeForSlot(slot) {
+  var def = TOWER_SLOTS[slot];
+  if (!def) return slot; // unbekannter Slot → unverändert zurück
+  var chosen = getActiveSlotType(slot);
+  if (chosen === def.variant && getOwned(def.variant)) return def.variant;
+  return def.base;
 }
 
 // ─── Turm-Upgrade ─────────────────────────────────────────
@@ -41,9 +57,19 @@ function upgradeCost() {
                     Math.pow(UPGRADE_DEF.costGrowth, towerUpgradeLevel));
 }
 
+// Maximale Upgrade-Stufe des aktuellen Levels. Levels können das globale
+// Maximum (UPGRADE_DEF.maxLevel) über "maxUpgradeLevel" anheben — z.B. erlauben
+// Level 4 & 5 eine zusätzliche Stufe.
+function maxUpgradeLevelForCurrent() {
+  var levelDef = LEVEL_DEFS[currentLevelIndex];
+  return (levelDef && typeof levelDef.maxUpgradeLevel === 'number')
+    ? levelDef.maxUpgradeLevel
+    : UPGRADE_DEF.maxLevel;
+}
+
 function canUpgrade() {
   var levelDef = LEVEL_DEFS[currentLevelIndex];
-  return !!levelDef.upgrades && towerUpgradeLevel < UPGRADE_DEF.maxLevel;
+  return !!levelDef.upgrades && towerUpgradeLevel < maxUpgradeLevelForCurrent();
 }
 
 // Kauft die nächste Upgrade-Stufe und verstärkt ALLE Türme auf dem Feld,
@@ -92,7 +118,10 @@ function startWave() {
 
 function placeTower(col, row) {
   if (!selectedTowerType) return;
-  var def = TOWER_DEFS[selectedTowerType];
+  // selectedTowerType ist der Slot-Key; der tatsächlich platzierte Turmtyp
+  // hängt von der aktiven Shop-Auswahl ab.
+  var actualType = activeTypeForSlot(selectedTowerType);
+  var def = TOWER_DEFS[actualType];
   if ((col===START.col && row===START.row) || (col===END.col && row===END.row)) return;
   for (var i = 0; i < towers.length; i++) {
     if (towers[i].col === col && towers[i].row === row) return;
@@ -101,7 +130,7 @@ function placeTower(col, row) {
   if (!gridTryBlock(col, row)) return;
 
   gold -= def.cost;
-  towers.push(new Tower(col, row, selectedTowerType));
+  towers.push(new Tower(col, row, actualType));
   for (var i = 0; i < enemies.length; i++) {
     if (!enemies[i].dead) enemies[i].updatePath(currentPath);
   }
@@ -221,13 +250,33 @@ function onCanvasTouchEnd(e) {
   hoveredCell = null;
 }
 
+// ─── Spielgeschwindigkeit ─────────────────────────────────
+// Der Spieler kann zwischen 1×, 2× und 3× umschalten. Der Multiplikator
+// skaliert die Simulationszeit (dt), ohne die Render-Framerate zu ändern.
+var SPEED_STEPS = [1, 2, 3];
+var speedIndex  = 0;
+
+function gameSpeed() { return SPEED_STEPS[speedIndex]; }
+
+function cycleGameSpeed() {
+  speedIndex = (speedIndex + 1) % SPEED_STEPS.length;
+  tgHaptic('light');
+  uiRefreshSpeed(gameSpeed());
+}
+
 // ─── Game Loop ────────────────────────────────────────────
 var lastTime = 0;
 
 function gameLoop(timestamp) {
   var dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
-  if (gameState === 'playing') update(dt);
+  // Simulation entsprechend der gewählten Geschwindigkeit beschleunigen.
+  // Pro Schritt wird mit begrenztem dt simuliert, damit schnelle Gegner bei
+  // 3× nicht durch Kollisions-/Pfadlogik "springen".
+  if (gameState === 'playing') {
+    var steps = gameSpeed();
+    for (var s = 0; s < steps; s++) update(dt);
+  }
   // Im Menü (vor dem ersten init) gibt es noch kein Grid zum Zeichnen.
   if (gameState !== 'menu' && gridCells) draw();
   requestAnimationFrame(gameLoop);
@@ -244,7 +293,7 @@ function update(dt) {
       lives--;
       tgHaptic('warning');
       uiUpdate(lives, gold, waveManager.currentWave);
-      if (lives <= 0) { endGame('gameover'); return; }
+      if (lives <= 0) { awardTalersDefeat(); endGame('gameover'); return; }
     }
   }
 
@@ -265,6 +314,8 @@ function update(dt) {
     projectiles[i].update(dt, enemies);
   }
 
+  updateChainBolts(dt);
+
   var newEnemies = [];
   for (var i = 0; i < enemies.length; i++) {
     if (!enemies[i].dead || enemies[i].deathFlash || enemies[i].goldPopupTimer > 0) newEnemies.push(enemies[i]);
@@ -281,6 +332,7 @@ function update(dt) {
     if (waveManager.checkWaveEnd(enemies)) {
       if (waveManager.currentWave >= TOTAL_WAVES) {
         unlockNextLevel(currentLevelIndex);
+        awardTalers();
         endGame('victory');
       } else {
         uiSetWaveState('ready', waveManager.currentWave);
@@ -288,6 +340,42 @@ function update(dt) {
       }
     }
   }
+}
+
+// Taler für den Levelsieg vergeben. Belohnung steigt mit Level-Index und
+// übrigen Leben; beim Wiederholen eines bereits geschafften Levels reduziert.
+// Setzt lastTalerReward für die Anzeige im Sieg-Overlay.
+var lastTalerReward = 0;
+
+function awardTalers() {
+  var base = TALER_BASE +
+             currentLevelIndex * TALER_PER_LEVEL +
+             Math.max(0, lives) * TALER_PER_LIFE;
+  var firstTime = !isLevelCleared(currentLevelIndex);
+  var reward = firstTime ? base : base * TALER_REPEAT_FACTOR;
+  reward = Math.floor(reward);
+
+  markLevelCleared(currentLevelIndex);
+  addTalers(reward);
+  lastTalerReward = reward;
+}
+
+// Trostbelohnung bei Niederlage: ein Anteil der Grundbelohnung, skaliert mit
+// dem erreichten Fortschritt (Anteil abgeschlossener Wellen). Je weiter man
+// gekommen ist, desto mehr Taler. Mindestens 0; bei sofortigem Verlieren ohne
+// eine geschaffte Welle gibt es nichts.
+function awardTalersDefeat() {
+  var total = TOTAL_WAVES || 1;
+  // Die zuletzt laufende Welle wurde nicht abgeschlossen → eine weniger.
+  var wavesCleared = Math.max(0, waveManager.currentWave - 1);
+  var progress = Math.min(1, wavesCleared / total);
+
+  var base = TALER_BASE + currentLevelIndex * TALER_PER_LEVEL;
+  var reward = Math.floor(base * TALER_DEFEAT_FACTOR * progress);
+  if (reward < 0) reward = 0;
+
+  if (reward > 0) addTalers(reward);
+  lastTalerReward = reward;
 }
 
 function endGame(result) {
@@ -333,6 +421,7 @@ function draw() {
   }
 
   for (var i = 0; i < projectiles.length; i++) projectiles[i].draw(ctx);
+  drawChainBolts(ctx);
   for (var i = 0; i < enemies.length; i++) enemies[i].draw(ctx);
 }
 
@@ -350,5 +439,6 @@ uiInit(
   function () { startWave(); },
   function () { restart(); }
 );
+shopInit();                    // Shop-Navigation einmalig binden
 showLevelSelect();             // zu Beginn: Übersichtsseite mit Leveln
 requestAnimationFrame(gameLoop);

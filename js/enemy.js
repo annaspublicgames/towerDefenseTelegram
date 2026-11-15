@@ -14,6 +14,8 @@ function Enemy(path, hp, speed, gold, color) {
   this.reachedEnd   = false;
   this.slowFactor   = 1;
   this.slowTimer    = 0;
+  this.poisonDps    = 0;    // Giftschaden pro Sekunde (0 = nicht vergiftet)
+  this.poisonTimer  = 0;    // verbleibende Giftdauer in Sekunden
   this.deathTimer   = 0;
   this.deathFlash   = false;
   this.goldPopupTimer    = 0;    // läuft nach dem Tod, zeigt "+Gold" an
@@ -38,6 +40,18 @@ Enemy.prototype.applySlow = function (factor, duration) {
   if (factor < this.slowFactor || this.slowTimer <= 0) {
     this.slowFactor = factor;
     this.slowTimer  = duration;
+  }
+};
+
+// Vergiftet den Gegner: fügt über "duration" Sekunden "dps" Schaden pro
+// Sekunde zu. Ein erneuter Treffer übernimmt den stärkeren Effekt und frischt
+// die Dauer auf (nicht kumulierend, damit das Balancing beherrschbar bleibt).
+Enemy.prototype.applyPoison = function (dps, duration) {
+  if (dps >= this.poisonDps || this.poisonTimer <= 0) {
+    this.poisonDps   = dps;
+    this.poisonTimer = duration;
+  } else if (duration > this.poisonTimer) {
+    this.poisonTimer = duration;
   }
 };
 
@@ -84,6 +98,15 @@ Enemy.prototype.update = function (dt) {
   if (this.slowTimer > 0) {
     this.slowTimer -= dt;
     if (this.slowTimer <= 0) { this.slowTimer = 0; this.slowFactor = 1; }
+  }
+  // Giftschaden über Zeit: tickt kontinuierlich über takeDamage, damit Tod,
+  // Death-Animation und Goldzählung wie bei normalem Schaden ausgelöst werden.
+  if (this.poisonTimer > 0) {
+    var tick = Math.min(this.poisonTimer, dt);
+    this.poisonTimer -= dt;
+    if (this.poisonTimer <= 0) this.poisonTimer = 0;
+    this.takeDamage(this.poisonDps * tick);
+    if (this.dead) return; // durch Gift gestorben
   }
   if (this.pathIndex >= this.path.length - 1) {
     this.reachedEnd = true;
@@ -168,6 +191,18 @@ Enemy.prototype.draw = function (ctx) {
       ctx.beginPath();
       ctx.arc(this.x, this.y + ENEMY_DRAW_SIZE * 0.18, CELL * 0.32, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(80, 180, 255, 0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Gift-Marker: pulsierender grüner Ring, solange der Gegner vergiftet ist.
+    if (this.poisonTimer > 0) {
+      var pulse = 0.6 + 0.4 * Math.sin(this.animTime * 8);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(this.x, this.y + ENEMY_DRAW_SIZE * 0.18, CELL * 0.26, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(120, 220, 60, ' + pulse.toFixed(2) + ')';
       ctx.lineWidth = 2.5;
       ctx.stroke();
       ctx.restore();

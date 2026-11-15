@@ -13,7 +13,10 @@ Online (GitHub Pages): siehe die Pages-URL dieses Repos.
 
 - Grid-basiertes Hochformat-Spielfeld, Pfad durch Turmplatzierung beeinflussbar
 - Drei Turmtypen: Normal, Splash (Flächenschaden), Slow (Verlangsamung)
-- Zehn Gegnerwellen mit steigender Schwierigkeit
+- Mehrere Level mit steigender Schwierigkeit; Level 1 (10 Wellen) ist das
+  ursprüngliche Spiel. Zu Beginn erscheint eine Level-Übersicht — anfangs ist
+  nur Level 1 spielbar, jedes weitere Level wird durch einen Sieg freigeschaltet.
+  Der Fortschritt wird lokal gespeichert (localStorage).
 - Gold- und Leben-System
 - Animierte Orc- und Turm-Sprites
 - Touch-Steuerung (Tippen = platzieren, langer Druck = verkaufen)

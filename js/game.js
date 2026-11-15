@@ -5,6 +5,7 @@
 var canvas, ctx;
 var towers, enemies, projectiles, waveManager;
 var gold, lives, gameState, hoveredCell;
+var towerUpgradeLevel = 0; // globale Turm-Upgrade-Stufe (gilt für alle Türme)
 
 function init() {
   canvas = document.getElementById('gameCanvas');
@@ -12,25 +13,55 @@ function init() {
   canvas.width  = COLS * CELL;
   canvas.height = ROWS * CELL;
 
+  var levelDef = LEVEL_DEFS[currentLevelIndex];
+
   gridInit();
   towers       = [];
   enemies      = [];
   projectiles  = [];
   waveManager  = new WaveManager();
-  gold         = 150;
-  lives        = 20;
+  gold         = levelDef.startGold;
+  lives        = levelDef.startLives;
   gameState    = 'playing';
   hoveredCell  = null;
   selectedTowerType = null;
+  towerUpgradeLevel = 0;
 
-  uiInit(
-    function (type) { selectedTowerType = type; },
-    function () { startWave(); },
-    function () { restart(); }
-  );
+  uiUpdateBtnStyles();
   uiUpdate(lives, gold, 0);
   uiSetWaveState('ready', 0);
+  uiInitUpgrade(!!levelDef.upgrades);
   uiHideOverlay();
+}
+
+// ─── Turm-Upgrade ─────────────────────────────────────────
+// Berechnet die Kosten des nächsten Upgrades (steigend je Stufe).
+function upgradeCost() {
+  return Math.round(UPGRADE_DEF.baseCost *
+                    Math.pow(UPGRADE_DEF.costGrowth, towerUpgradeLevel));
+}
+
+function canUpgrade() {
+  var levelDef = LEVEL_DEFS[currentLevelIndex];
+  return !!levelDef.upgrades && towerUpgradeLevel < UPGRADE_DEF.maxLevel;
+}
+
+// Kauft die nächste Upgrade-Stufe und verstärkt ALLE Türme auf dem Feld,
+// auch bereits platzierte.
+function upgradeTowers() {
+  if (gameState !== 'playing') return;
+  if (!canUpgrade()) return;
+  var cost = upgradeCost();
+  if (gold < cost) return;
+
+  gold -= cost;
+  towerUpgradeLevel++;
+  for (var i = 0; i < towers.length; i++) {
+    towers[i].applyUpgrade(towerUpgradeLevel);
+  }
+  tgHaptic('success');
+  uiUpdate(lives, gold, waveManager.currentWave);
+  uiRefreshUpgrade();
 }
 
 // Canvas-Eingaben nur einmal registrieren (nicht bei jedem Restart).
@@ -48,6 +79,7 @@ function registerCanvasInput() {
 }
 
 function restart() {
+  uiHideOverlay();
   init();
 }
 
@@ -196,7 +228,8 @@ function gameLoop(timestamp) {
   var dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
   if (gameState === 'playing') update(dt);
-  draw();
+  // Im Menü (vor dem ersten init) gibt es noch kein Grid zum Zeichnen.
+  if (gameState !== 'menu' && gridCells) draw();
   requestAnimationFrame(gameLoop);
 }
 
@@ -247,6 +280,7 @@ function update(dt) {
   if (waveManager.waveActive) {
     if (waveManager.checkWaveEnd(enemies)) {
       if (waveManager.currentWave >= TOTAL_WAVES) {
+        unlockNextLevel(currentLevelIndex);
         endGame('victory');
       } else {
         uiSetWaveState('ready', waveManager.currentWave);
@@ -303,6 +337,18 @@ function draw() {
 }
 
 // ─── Start ────────────────────────────────────────────────
-init();
-registerCanvasInput(); // Eingaben einmalig binden
+// Canvas muss existieren, bevor Eingaben gebunden werden und der Loop läuft.
+canvas = document.getElementById('gameCanvas');
+ctx    = canvas.getContext('2d');
+canvas.width  = COLS * CELL;
+canvas.height = ROWS * CELL;
+
+gameState = 'menu';
+registerCanvasInput();         // Eingaben einmalig binden
+uiInit(
+  function (type) { selectedTowerType = type; },
+  function () { startWave(); },
+  function () { restart(); }
+);
+showLevelSelect();             // zu Beginn: Übersichtsseite mit Leveln
 requestAnimationFrame(gameLoop);

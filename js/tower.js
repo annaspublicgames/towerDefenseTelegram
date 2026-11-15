@@ -51,11 +51,31 @@ Projectile.prototype.draw = function (ctx) {
   ctx.fill();
 };
 
+// Berechnet die effektiven Turmwerte aus der Basis-Definition und der
+// globalen Upgrade-Stufe. Mutiert TOWER_DEFS nicht, sondern liefert eine Kopie.
+function computeTowerDef(type, level) {
+  var base = TOWER_DEFS[type];
+  var def = {};
+  for (var k in base) { if (base.hasOwnProperty(k)) def[k] = base[k]; }
+  if (level > 0) {
+    def.damage   = Math.round(base.damage   * Math.pow(UPGRADE_DEF.damageMult,   level));
+    def.range    = base.range    * Math.pow(UPGRADE_DEF.rangeMult,    level);
+    def.fireRate = base.fireRate * Math.pow(UPGRADE_DEF.fireRateMult, level);
+    if (base.slowFactor < 1) {
+      def.slowDur    = base.slowDur + UPGRADE_DEF.slowDurBonus * level;
+      def.slowFactor = base.slowFactor * Math.pow(UPGRADE_DEF.slowFactorMult, level);
+    }
+  }
+  def.upgradeLevel = level;
+  return def;
+}
+
 function Tower(col, row, type) {
   this.col  = col;
   this.row  = row;
   this.type = type;
-  this.def  = TOWER_DEFS[type];
+  // Effektive Werte je nach aktueller globaler Upgrade-Stufe.
+  this.def  = computeTowerDef(type, towerUpgradeLevel);
   this.x    = col * CELL + CELL/2;
   this.y    = row * CELL + CELL/2;
   this.cooldown = 0;
@@ -64,6 +84,12 @@ function Tower(col, row, type) {
   this.animTime = Math.random() * 1; // versetzter Start
   this.animFps  = 6;
 }
+
+// Wendet die aktuelle globale Upgrade-Stufe auf diesen (bereits platzierten)
+// Turm an. Wird beim Kauf eines Upgrades für alle Türme aufgerufen.
+Tower.prototype.applyUpgrade = function (level) {
+  this.def = computeTowerDef(this.type, level);
+};
 
 Tower.prototype.update = function (dt, enemies, projectiles) {
   this.animTime += dt;

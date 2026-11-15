@@ -1,7 +1,7 @@
 /**
  * UI — HUD, Turmauswahl, Wellen-Button, Overlay.
  */
-var hudLives, hudGold, hudWave, waveInfoEl, btnWave;
+var hudLives, hudGold, hudWave, waveInfoEl, btnWave, btnUpgrade;
 var towerBtns = {};
 var selectedTowerType = null;
 
@@ -11,6 +11,7 @@ function uiInit(onTowerSelect, onStartWave, onRestart) {
   hudWave    = document.getElementById('hud-wave');
   waveInfoEl = document.getElementById('wave-info');
   btnWave    = document.getElementById('btn-start-wave');
+  btnUpgrade = document.getElementById('btn-upgrade');
 
   towerBtns.normal = document.getElementById('btn-tower-normal');
   towerBtns.splash = document.getElementById('btn-tower-splash');
@@ -32,7 +33,44 @@ function uiInit(onTowerSelect, onStartWave, onRestart) {
   btnWave.addEventListener('click', onStartWave);
   document.getElementById('restart-btn').addEventListener('click', onRestart);
 
+  // Overlay-Navigation: nächstes Level bzw. zurück zur Übersicht
+  document.getElementById('next-level-btn').addEventListener('click', function () {
+    uiHideOverlay();
+    startLevel(currentLevelIndex + 1);
+  });
+  document.getElementById('levels-btn').addEventListener('click', function () {
+    uiHideOverlay();
+    showLevelSelect();
+  });
+
+  btnUpgrade.addEventListener('click', function () {
+    if (btnUpgrade.disabled) return;
+    upgradeTowers();
+  });
+
   uiDrawTowerIcons();
+}
+
+// Blendet den Upgrade-Button je nach Level ein/aus (nur Level mit upgrades:true).
+function uiInitUpgrade(enabled) {
+  if (!btnUpgrade) return;
+  btnUpgrade.style.display = enabled ? '' : 'none';
+  uiRefreshUpgrade();
+}
+
+// Aktualisiert Beschriftung und Verfügbarkeit des Upgrade-Buttons.
+function uiRefreshUpgrade() {
+  if (!btnUpgrade || btnUpgrade.style.display === 'none') return;
+  if (towerUpgradeLevel >= UPGRADE_DEF.maxLevel) {
+    btnUpgrade.disabled = true;
+    btnUpgrade.textContent = '⬆ Upgrade max (Stufe ' + towerUpgradeLevel + ')';
+    return;
+  }
+  var cost = upgradeCost();
+  btnUpgrade.textContent = '⬆ Alle Türme upgraden (Stufe ' +
+    (towerUpgradeLevel + 1) + ') · 💰 ' + cost;
+  btnUpgrade.disabled = (typeof gold === 'number' && gold < cost) ||
+                        gameState !== 'playing';
 }
 
 // Zeichnet den ersten (statischen) Frame jedes Turm-Spritesheets in das
@@ -84,6 +122,8 @@ function uiUpdate(lives, gold, waveNum) {
   ['normal','splash','slow'].forEach(function (type) {
     towerBtns[type].classList.toggle('cant-afford', gold < TOWER_DEFS[type].cost);
   });
+
+  uiRefreshUpgrade();
 }
 
 function uiSetWaveState(state, waveNum) {
@@ -107,16 +147,30 @@ function uiSetWaveState(state, waveNum) {
 function uiShowOverlay(type, gold) {
   var overlay = document.getElementById('overlay');
   overlay.classList.add('active');
-  var title = document.getElementById('overlay-title');
-  var msg   = document.getElementById('overlay-msg');
+  var title     = document.getElementById('overlay-title');
+  var msg       = document.getElementById('overlay-msg');
+  var nextBtn   = document.getElementById('next-level-btn');
+  var restartBtn= document.getElementById('restart-btn');
+
   if (type === 'victory') {
     title.className = 'win';
     title.textContent = '🏆 Sieg!';
-    msg.textContent = 'Alle Wellen überstanden! Gold übrig: ' + gold;
+    var hasNext = hasNextLevel(currentLevelIndex);
+    if (hasNext) {
+      msg.textContent = LEVEL_DEFS[currentLevelIndex].name +
+        ' geschafft! Nächstes Level freigeschaltet.';
+      nextBtn.style.display = '';
+    } else {
+      msg.textContent = 'Alle Level gemeistert! Gold übrig: ' + gold;
+      nextBtn.style.display = 'none';
+    }
+    restartBtn.textContent = 'Nochmal';
   } else {
     title.className = 'lose';
     title.textContent = '💀 Game Over';
     msg.textContent = 'Alle Leben verloren. Versuche es nochmal!';
+    nextBtn.style.display = 'none';
+    restartBtn.textContent = 'Neu starten';
   }
 }
 
